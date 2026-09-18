@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HYU Campus Guide Dashboard</title>
+<style>
+:root{--navy:#0b2347;--blue:#1d5fd1;--bg:#f4f6fa;--card:#fff;--text:#172033;--muted:#667085;--line:#e5e7eb}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text)}
+header{background:linear-gradient(135deg,#071a36,#164b9a);color:#fff;padding:28px 5vw}
+header h1{margin:0 0 6px;font-size:28px}header p{margin:0;opacity:.82}
+nav{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);padding:10px 5vw;display:flex;gap:8px;overflow:auto}
+nav button,.primary{border:0;background:#eef3fb;color:#17345f;padding:10px 15px;border-radius:10px;font-weight:700;cursor:pointer}
+nav button.active,.primary{background:var(--blue);color:#fff}
+main{max-width:1200px;margin:28px auto;padding:0 20px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 5px 18px #13254a0a}
+.card h2,.card h3{margin-top:0}.muted{color:var(--muted)}.stat{font-size:30px;font-weight:800}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}.toolbar input,.toolbar select,.editor input,.editor textarea{border:1px solid var(--line);border-radius:10px;padding:11px;background:#fff}
+.toolbar input{flex:1;min-width:220px}.building{cursor:pointer;transition:.15s}.building:hover{transform:translateY(-2px);border-color:#b7c9ea}
+.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#edf3ff;color:#2455a0;font-size:12px;font-weight:700;margin:2px}
+.section{display:none}.section.show{display:block}
+.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:20px;z-index:10}.modal.show{display:flex}.modalbox{background:#fff;border-radius:18px;max-width:720px;width:100%;max-height:90vh;overflow:auto;padding:24px}
+.close{float:right;border:0;background:#eee;border-radius:8px;padding:8px;cursor:pointer}.editor{display:grid;gap:10px}.editor textarea{min-height:110px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.item{padding:14px 0;border-top:1px solid var(--line)}.item:first-child{border-top:0}.item h4{margin:0 0 5px}
+footer{text-align:center;color:var(--muted);padding:35px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}header h1{font-size:23px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>HYU Campus Guide</h1>
+  <p>한양대학교 서울캠퍼스 건물·교내기관 안내 대시보드</p>
+</header>
+<nav id="nav">
+ <button class="active" data-tab="home">홈</button><button data-tab="buildings">건물 안내</button>
+ <button data-tab="institutions">주요 기관 3곳</button><button data-tab="edit">내용 수정</button>
+ <button data-tab="members">팀원 명단</button><button data-tab="photos">학교 탐방 사진</button>
+</nav>
+<main>
+<section id="home" class="section show">
+ <div class="grid">
+  <div class="card"><div class="muted">서울캠퍼스</div><div class="stat">16개</div><div>단과대학</div></div>
+  <div class="card"><div class="muted">건물 안내</div><div class="stat" id="buildingCount">0</div><div>등록된 건물</div></div>
+  <div class="card"><div class="muted">기관 안내</div><div class="stat">3</div><div>상세 소개 대상</div></div>
+ </div>
+ <div class="card" style="margin-top:16px">
+  <h2>이 대시보드는?</h2>
+  <p id="intro"></p>
+  <span class="tag">건물 검색</span><span class="tag">기관 상세보기</span><span class="tag">내용 편집</span><span class="tag">브라우저 저장</span>
+ </div>
+</section>
+
+<section id="buildings" class="section">
+ <div class="card">
+  <h2>서울캠퍼스 건물 안내</h2>
+  <p class="muted">건물 번호 또는 이름으로 검색할 수 있습니다. 카드를 누르면 설명을 볼 수 있습니다.</p>
+  <div class="toolbar"><input id="search" placeholder="예: 경제금융관, 410"><select id="group"><option value="">전체</option></select></div>
+  <div id="buildingList" class="grid"></div>
+ </div>
+</section>
+
+<section id="institutions" class="section">
+ <div class="grid" id="institutionCards"></div>
+</section>
+
+<section id="edit" class="section">
+ <div class="card">
+  <h2>내용 수정</h2>
+  <p class="muted">기본적으로 브라우저 저장을 사용합니다. 여러 사람이 같은 내용을 함께 보려면 아래의 Firebase 설정을 넣어 공동 데이터베이스 모드로 사용할 수 있습니다. (Firebase 웹 SDK 없이도 이 파일 자체는 계속 작동합니다.)</p>
+<div class="card" style="background:#f8fbff">
+<h3>공동 편집 설정</h3><p id="syncStatus" class="muted" style="font-weight:700">Firebase 연결 확인 중…</p>
+<p class="muted">Firebase 프로젝트의 Web App 설정값을 입력하면 기관 정보와 리뷰가 여러 사용자에게 실시간으로 공유됩니다. 설정하지 않으면 기존처럼 이 브라우저에만 저장됩니다. 공동 사용을 위해서는 Firebase Authentication의 익명 로그인과 Firestore 보안 규칙 설정이 필요합니다.</p>
+<div class="editor">
+<textarea id="firebaseConfig" placeholder='Firebase 설정을 붙여넣으세요.' style="min-height:150px"></textarea>
+<button class="primary" onclick="saveFirebaseConfig()">공동 편집 설정 저장</button>
+</div></div>
+  <div class="toolbar"><button class="primary" onclick="saveAll()">저장</button><button onclick="resetAll()">기본 내용으로 초기화</button><button onclick="exportData()">JSON 내보내기</button><label class="primary" style="cursor:pointer">JSON 가져오기<input type="file" id="importFile" accept=".json" hidden></label></div>
+  <div id="editor"></div>
+ </div>
+</section>
+
+<section id="members" class="section">
+ <div class="card">
+  <h2>팀원 명단</h2>
+  <p class="muted">각 팀원은 자기 사진을 선택해서 올릴 수 있습니다. 사진과 이름·역할은 공동 데이터에 저장됩니다.</p>
+  <div class="grid" id="memberList"></div>
+ </div>
+</section>
+
+<section id="photos" class="section">
+ <div class="card">
+  <h2>학교 탐방 사진</h2>
+  <p class="muted">한양대학교 서울캠퍼스 탐방 사진을 모아두는 공간입니다.</p>
+  <div class="grid">
+   <div class="card" style="min-height:220px;display:flex;align-items:center;justify-content:center;text-align:center"><div><div style="font-size:48px">📷</div><h3>탐방 사진 1</h3><p class="muted">사진을 추가해주세요.</p></div></div>
+   <div class="card" style="min-height:220px;display:flex;align-items:center;justify-content:center;text-align:center"><div><div style="font-size:48px">📷</div><h3>탐방 사진 2</h3><p class="muted">사진을 추가해주세요.</p></div></div>
+   <div class="card" style="min-height:220px;display:flex;align-items:center;justify-content:center;text-align:center"><div><div style="font-size:48px">📷</div><h3>탐방 사진 3</h3><p class="muted">사진을 추가해주세요.</p></div></div>
+  </div>
+ </div>
+</section>
+</main>
+<footer>한양대학교 서울캠퍼스 안내용 프로토타입 · 공식 지도/기관 정보로 최종 검수 필요</footer>
+
+<div class="modal" id="modal"><div class="modalbox"><button class="close" onclick="closeModal()">닫기</button><div id="modalContent"></div></div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+const defaults={
+intro:"한양대학교 서울캠퍼스의 주요 건물을 쉽게 찾고, 팀에서 선정한 3개 교내기관의 역할·위치·이용 방법을 한곳에서 확인할 수 있도록 만든 안내형 대시보드입니다.",
+institutions:[
+{name:"기관 1 — 내용 입력",building:"건물명 / 호수 입력",summary:"기관의 핵심 역할을 입력하세요.",reviews:[],services:"주요 서비스 1\\n주요 서비스 2\\n주요 서비스 3",hours:"운영시간 입력",contact:"연락처 입력",link:""},
+{name:"기관 2 — 내용 입력",building:"건물명 / 호수 입력",summary:"기관의 핵심 역할을 입력하세요.",reviews:[],services:"주요 서비스 1\\n주요 서비스 2\\n주요 서비스 3",hours:"운영시간 입력",contact:"연락처 입력",link:""},
+{name:"기관 3 — 내용 입력",building:"건물명 / 호수 입력",summary:"기관의 핵심 역할을 입력하세요.",reviews:[],services:"주요 서비스 1\\n주요 서비스 2\\n주요 서비스 3",hours:"운영시간 입력",contact:"연락처 입력",link:""}
+],
+members:[
+{name:"팀원 1",role:"역할 / 담당 내용 입력",photo:""},
+{name:"팀원 2",role:"역할 / 담당 내용 입력",photo:""},
+{name:"팀원 3",role:"역할 / 담당 내용 입력",photo:""},
+{name:"팀원 4",role:"역할 / 담당 내용 입력",photo:""}
+],
+buildings:[
+["101","역사관(구본관)","역사","한양대학교의 역사와 관련된 공간."],
+["102","본관","행정","대학 주요 행정 기능이 이루어지는 건물."],
+["105","학생복지관(한양플라자)","학생지원","학생 편의·복지 관련 시설이 있는 공간."],
+["107","학생회관","학생지원","학생자치 및 학생 편의 공간."],
+["108","국제관","국제","국제 관련 교육·행정 기능이 있는 건물."],
+["109","박물관","문화","대학의 역사·문화 자료를 전시하는 공간."],
+["201","재성토목관","공학","토목 관련 교육·연구 공간."],
+["202","건축관","공학","건축 관련 교육·연구 공간."],
+["203","과학기술관","공학","과학·기술 분야 교육·연구 공간."],
+["204","신소재공학관","공학","신소재공학 관련 교육·연구 공간."],
+["206","공업센터 본관","공학","공학 교육·연구 공간."],
+["207","공업센터 별관","공학","공학 교육·연구 공간."],
+["208","퓨전테크센터(FTC)","공학","융합기술 관련 교육·연구 공간."],
+["210","정몽구 미래자동차연구센터","공학","미래자동차 관련 연구 공간."],
+["211","제2공학관","공학","공과대학 교육·연구 공간."],
+["305","IT/BT관","공학","IT·BT 분야 교육·연구 공간."],
+["306","올림픽체육관","체육","체육 및 학생 활동 공간."],
+["401","생활과학관","생활과학","생활과학 관련 교육·연구 공간."],
+["403","제2음악관","음악","음악 관련 교육·연습 공간."],
+["409","제3법학관","법학","법학 관련 교육·연구 공간."],
+["410","경제금융관","경제·금융","경제금융대학 관련 교육·연구 공간."],
+["504","사회과학관","사회과학","사회과학 관련 교육·연구 공간."],
+["505","사범대학 본관","사범","사범대학 관련 교육·행정 공간."],
+["507","자연과학관","자연과학","자연과학 관련 교육·연구 공간."],
+["508","인문관","인문","인문과학 관련 교육·연구 공간."],
+["604","제1의학관","의학","의과대학 교육·연구 공간."],
+["606","의과대학 본관","의학","의과대학 관련 교육·행정 공간."],
+["617","간호미래교육관","간호","간호교육 관련 공간."],
+["701","한양종합기술연구원(HIT)","연구","연구·산학협력 관련 공간."],
+["705","융합교육관","교육","융합교육 관련 공간."],
+["706","경영관","경영","경영대학 관련 교육·연구 공간."]
+]};
+
+let data=JSON.parse(localStorage.getItem("hyuDashboardData")||"null")||structuredClone(defaults);
+data.institutions.forEach(x=>{if(!x.reviews)x.reviews=[]});
+if(!Array.isArray(data.members)){
+  data.members=structuredClone(defaults.members);
+} else {
+  data.members=data.members.map((m,i)=>({
+    name:m?.name||`팀원 ${i+1}`,
+    role:m?.role||"역할 / 담당 내용 입력",
+    photo:m?.photo||""
+  }));
+}
+const firebaseConfigKey="hyuFirebaseConfig";
+let firebaseConfig=JSON.parse(localStorage.getItem(firebaseConfigKey)||"null");
+let db=null, auth=null, unsubscribe=null, firebaseReady=false;
+const sharedDocPath="hyuDashboard/shared";
+const $=s=>document.querySelector(s);
+const embeddedFirebaseConfig={
+  "apiKey": "AIzaSyDfiD5eoBuLqqvgjaHEf1gkM07fSiMVYSQ",
+  "authDomain": "hanyang-campus-guide-fighteam.firebaseapp.com",
+  "databaseURL": "https://hanyang-campus-guide-fighteam-default-rtdb.asia-southeast1.firebasedatabase.app",
+  "projectId": "hanyang-campus-guide-fighteam",
+  "storageBucket": "hanyang-campus-guide-fighteam.firebasestorage.app",
+  "messagingSenderId": "693054547517",
+  "appId": "1:693054547517:web:15abded05214529dcc2c54",
+  "measurementId": "G-5W4VSHE5F6"
+};
+
+function setSyncStatus(text,ok=false){
+  let el=$("#syncStatus");
+  if(!el)return;
+  el.textContent=text;
+  el.style.color=ok?"#176b3a":"var(--muted)";
+}
+
+async function withTimeout(promise, ms, label){
+  return await Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+" 시간 초과")),ms))
+  ]);
+}
+
+async function initFirebase(){
+  if(!firebaseConfig || !firebaseConfig.apiKey || !firebaseConfig.projectId){
+    setSyncStatus("Firebase 설정 없음 · 이 기기에만 저장",false);
+    return false;
+  }
+  try{
+    setSyncStatus("Firebase 연결 확인 중…",false);
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    auth=firebase.auth();
+    db=firebase.firestore();
+
+    if(!auth.currentUser){
+      setSyncStatus("Firebase 익명 로그인 중…",false);
+      await withTimeout(auth.signInAnonymously(),10000,"익명 로그인");
+    }
+    if(!auth.currentUser) throw new Error("익명 로그인 후 사용자 인증 정보가 없습니다.");
+
+    setSyncStatus("Firestore 읽기 권한 확인 중…",false);
+    const ref=db.doc(sharedDocPath);
+    const snap=await withTimeout(ref.get(),10000,"Firestore 읽기");
+
+    if(snap.exists){
+      const rawRemote=snap.data().dataJson;
+        const remote=typeof rawRemote === "string" ? JSON.parse(rawRemote) : null;
+      if(remote && remote.institutions && remote.buildings){
+        data=remote;
+        data.institutions.forEach(x=>{if(!x.reviews)x.reviews=[]});
+        if(!Array.isArray(data.members)) data.members=structuredClone(defaults.members);
+        else data.members=data.members.map((m,i)=>({name:m?.name||`팀원 ${i+1}`,role:m?.role||"역할 / 담당 내용 입력",photo:m?.photo||""}));
+        localStorage.setItem("hyuDashboardData",JSON.stringify(data));
+        render();
+      }
+    }else{
+      setSyncStatus("공동 데이터 최초 생성 중…",false);
+      await withTimeout(ref.set({
+        dataJson:JSON.stringify(data),
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+      },{merge:true}),10000,"Firestore 최초 저장");
+    }
+
+    if(unsubscribe) unsubscribe();
+    unsubscribe=ref.onSnapshot(snap=>{
+      if(snap.exists){
+        const rawRemote=snap.data().dataJson;
+        const remote=typeof rawRemote === "string" ? JSON.parse(rawRemote) : null;
+        if(remote && remote.institutions && remote.buildings){
+          data=remote;
+          data.institutions.forEach(x=>{if(!x.reviews)x.reviews=[]});
+          localStorage.setItem("hyuDashboardData",JSON.stringify(data));
+          render();
+        }
+      }
+      firebaseReady=true;
+      setSyncStatus("🟢 Firebase 실시간 공동 편집 연결됨",true);
+    },err=>{
+      console.error(err);
+      firebaseReady=false;
+      setSyncStatus("🔴 실시간 동기화 실패: "+(err.code||err.message),false);
+    });
+
+    firebaseReady=true;
+    setSyncStatus("🟢 Firebase 실시간 공동 편집 연결됨",true);
+    return true;
+  }catch(e){
+    firebaseReady=false;
+    const code=e && e.code ? e.code : "";
+    const msg=e && e.message ? e.message : String(e);
+    setSyncStatus("🔴 Firebase 연결 실패: "+(code?code+" · ":"")+msg,false);
+    console.error(e);
+    return false;
+  }
+}
+
+async function saveSharedData(){
+  localStorage.setItem("hyuDashboardData",JSON.stringify(data));
+  if(!firebaseReady || !db){
+    setSyncStatus("🔴 Firebase에 연결되지 않아 이 기기에만 저장됨",false);
+    return false;
+  }
+  try{
+    await withTimeout(db.doc(sharedDocPath).set({
+      dataJson:JSON.stringify(data),
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    },{merge:true}),10000,"Firestore 저장");
+    setSyncStatus("🟢 Firebase 저장 완료 · 다른 기기와 동기화 중",true);
+    return true;
+  }catch(e){
+    console.error(e);
+    setSyncStatus("🔴 Firebase 저장 실패: "+(e.code||e.message),false);
+    return false;
+  }
+}
+
+async function saveFirebaseConfig(){
+  const raw=$("#firebaseConfig").value.trim();
+  try{
+    const parsed=JSON.parse(raw);
+    if(!parsed.apiKey || !parsed.projectId){
+      throw new Error("apiKey/projectId missing");
+    }
+    firebaseConfig=parsed;
+    localStorage.setItem(firebaseConfigKey,JSON.stringify(firebaseConfig));
+    const ok=await initFirebase();
+    if(ok) alert("Firebase 연결을 시작했습니다. Firestore 데이터가 실시간으로 공유됩니다.");
+    else alert("설정은 저장했지만 Firebase 연결에 실패했습니다. Firebase Authentication(익명)과 Firestore 보안 규칙을 확인해주세요.");
+  }catch(e){
+    alert("Firebase 설정 JSON 형식이 올바르지 않습니다. Firebase 콘솔의 Web App 설정값을 그대로 붙여넣어주세요.");
+  }
+}
+function addReview(i){
+  const text=$("#review-text-"+i).value.trim(); if(!text){alert("리뷰 내용을 입력해주세요.");return;}
+  data.institutions[i].reviews=data.institutions[i].reviews||[];
+  data.institutions[i].reviews.push({name:$("#review-name-"+i).value.trim()||"익명",rating:+$("#review-rating-"+i).value,text,createdAt:new Date().toISOString()});
+  saveSharedData(); renderInstitutions(); addInlineInstitutionEditors();
+}
+function deleteReview(i,ri){
+  if(confirm("이 리뷰를 삭제할까요?")){data.institutions[i].reviews.splice(ri,1);saveSharedData();renderInstitutions();}
+}
+function render(){
+ $("#intro").textContent=data.intro; $("#buildingCount").textContent=data.buildings.length;
+ const groups=[...new Set(data.buildings.map(x=>x[2]))].sort();
+ $("#group").innerHTML='<option value="">전체</option>'+groups.map(g=>`<option>${g}</option>`).join("");
+ renderBuildings(); renderInstitutions(); addInlineInstitutionEditors(); renderEditor(); renderMembers();
+}
+function renderBuildings(){
+ const q=($("#search")?.value||"").toLowerCase(), g=$("#group")?.value||"";
+ const arr=data.buildings.filter(x=>(!q||x.join(" ").toLowerCase().includes(q))&&(!g||x[2]===g));
+ $("#buildingList").innerHTML=arr.map((x,i)=>`<div class="card building" onclick="showBuilding(${data.buildings.indexOf(x)})"><span class="tag">${x[0]}</span><span class="tag">${x[2]}</span><h3>${x[1]}</h3><p class="muted">${x[3]}</p></div>`).join("")||'<p>검색 결과가 없습니다.</p>';
+}
+function renderInstitutions(){
+ $("#institutionCards").innerHTML=data.institutions.map((x,i)=>`<div class="card"><span class="tag">기관 ${i+1}</span><h2>${x.name}</h2><p>${x.summary}</p><div class="item"><h4>📍 위치</h4><div>${x.building}</div></div><div class="item"><h4>🧩 주요 서비스</h4><div>${x.services.split("\\n").map(s=>"• "+s).join("<br>")}</div></div><div class="item"><h4>🕒 운영시간</h4><div>${x.hours}</div></div><div class="item"><h4>☎ 문의</h4><div>${x.contact}</div></div>
+<div class="item"><h4>💬 이용자 리뷰</h4>
+<div id="reviews-${i}">${(x.reviews||[]).map((r,ri)=>`<div class="review" style="padding:10px 0;border-top:1px solid var(--line)"><strong>${esc(r.name||"익명")}</strong> <span class="muted">★ ${r.rating||5}/5</span><p style="margin:5px 0">${esc(r.text)}</p><button onclick="deleteReview(${i},${ri})">삭제</button></div>`).join("")||'<p class="muted">아직 리뷰가 없습니다.</p>'}</div>
+<div class="row" style="margin-top:10px"><input id="review-name-${i}" placeholder="닉네임(선택)"><select id="review-rating-${i}"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></div>
+<textarea id="review-text-${i}" placeholder="이 기관/건물을 이용하며 느낀 점을 남겨주세요." style="width:100%;margin-top:8px"></textarea>
+<button class="primary" style="margin-top:8px" onclick="addReview(${i})">리뷰 등록</button><p class="muted" style="font-size:12px;margin:7px 0 0">리뷰는 익명 로그인으로 저장되며 닉네임만 표시됩니다.</p>
+</div>${x.link?`<div class="item"><a href="${x.link}" target="_blank">공식 홈페이지 열기 ↗</a></div>`:""}</div>`).join("");
+}
+
+function addInlineInstitutionEditors(){
+  document.querySelectorAll("#institutionList .card").forEach((card,i)=>{
+    if(card.querySelector(".inline-inst-editor")) return;
+    const box=document.createElement("div");
+    box.className="inline-inst-editor";
+    box.style.cssText="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)";
+    box.innerHTML=`
+      <input id="instName_${i}" value="${esc(data.institutions[i].name)}" placeholder="기관명">
+      <input id="instBuilding_${i}" value="${esc(data.institutions[i].building)}" placeholder="건물명 / 호수">
+      <textarea id="instSummary_${i}" rows="3" placeholder="기관 설명">${esc(data.institutions[i].summary)}</textarea>
+      <textarea id="instServices_${i}" rows="3" placeholder="주요 서비스">${esc(data.institutions[i].services)}</textarea>
+      <input id="instHours_${i}" value="${esc(data.institutions[i].hours)}" placeholder="운영시간">
+      <input id="instContact_${i}" value="${esc(data.institutions[i].contact)}" placeholder="연락처">
+      <input id="instLink_${i}" value="${esc(data.institutions[i].link)}" placeholder="관련 링크">
+      <button class="primary" onclick="saveInlineInstitution(${i})">저장</button>`;
+    const b=document.createElement("button");
+    b.textContent="✏️ 이 기관 바로 수정";
+    b.onclick=()=>{box.style.display=box.style.display==="none"?"block":"none";};
+    card.appendChild(b);
+    card.appendChild(box);
+  });
+}
+async function saveInlineInstitution(i){
+  const x=data.institutions[i];
+  x.name=$("#instName_"+i).value;
+  x.building=$("#instBuilding_"+i).value;
+  x.summary=$("#instSummary_"+i).value;
+  x.services=$("#instServices_"+i).value;
+  x.hours=$("#instHours_"+i).value;
+  x.contact=$("#instContact_"+i).value;
+  x.link=$("#instLink_"+i).value;
+  const ok=await saveSharedData();
+  render();
+  alert(ok?"저장 완료! 다른 기기에도 반영됩니다.":"저장 실패. Firebase 상태를 확인해주세요.");
+}
+
+
+function saveInlineMember(i){
+  data.members[i].name=$("#memberName_"+i).value;
+  data.members[i].role=$("#memberRole_"+i).value;
+  return saveSharedData();
+}
+
+async function saveInlineHome(){
+  data.intro=$("#introInlineEdit").value;
+  const ok=await saveSharedData();
+  render();
+  alert(ok?"저장 완료! 다른 기기에도 반영됩니다.":"저장 실패. Firebase 상태를 확인해주세요.");
+}
+function renderMembers(){
+  const list=$("#memberList");
+  if(!list)return;
+  if(!Array.isArray(data.members)) data.members=structuredClone(defaults.members);
+  list.innerHTML=data.members.map((m,i)=>{
+    const photo=m.photo
+      ? `<img src="${m.photo}" alt="${esc(m.name)} 사진" style="width:120px;height:120px;object-fit:cover;border-radius:18px;border:1px solid var(--line);display:block;margin:0 auto 12px">`
+      : `<div style="width:120px;height:120px;border-radius:18px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:42px;background:#f8fbff">👤</div>`;
+    return `<div class="card" style="text-align:center">
+      <span class="tag">팀원 ${i+1}</span>
+      ${photo}
+      <h3>${esc(m.name)}</h3>
+      <p class="muted">${esc(m.role)}</p>
+      <button onclick="toggleMemberEdit(${i})">✏️ 이 팀원 바로 수정</button>
+      <div id="memberEdit_${i}" style="display:none;margin-top:10px;text-align:left">
+        <input id="memberName_${i}" value="${esc(m.name)}" placeholder="이름">
+        <input id="memberRole_${i}" value="${esc(m.role)}" placeholder="역할 / 담당 내용">
+        <button class="primary" onclick="saveInlineMemberAndRefresh(${i})">저장</button>
+      </div>
+      <label class="primary" style="display:inline-block;cursor:pointer;margin-top:6px">
+        📷 사진 올리기
+        <input type="file" accept="image/*" hidden onchange="uploadMemberPhoto(${i},this)">
+      </label>
+      ${m.photo?`<button style="margin-top:6px" onclick="removeMemberPhoto(${i})">사진 삭제</button>`:""}
+    </div>`;
+  }).join("");
+}
+
+
+function toggleMemberEdit(i){
+  const el=$("#memberEdit_"+i);
+  if(el) el.style.display=el.style.display==="none"?"block":"none";
+}
+async function saveInlineMemberAndRefresh(i){
+  const ok=await saveInlineMember(i);
+  renderMembers();
+  alert(ok?"저장 완료! 다른 기기에도 반영됩니다.":"저장 실패. Firebase 상태를 확인해주세요.");
+}
+function compressMemberPhoto(file){
+  return new Promise((resolve,reject)=>{
+    if(!file || !file.type.startsWith("image/")){
+      reject(new Error("이미지 파일만 선택할 수 있습니다."));
+      return;
+    }
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const max=500;
+        const scale=Math.min(1,max/Math.max(img.width,img.height));
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.max(1,Math.round(img.width*scale));
+        canvas.height=Math.max(1,Math.round(img.height*scale));
+        const ctx=canvas.getContext("2d");
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL("image/jpeg",0.78));
+      };
+      img.onerror=()=>reject(new Error("사진을 읽을 수 없습니다."));
+      img.src=e.target.result;
+    };
+    reader.onerror=()=>reject(new Error("사진 파일을 읽을 수 없습니다."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadMemberPhoto(i,input){
+  const file=input.files && input.files[0];
+  if(!file)return;
+  try{
+    const photo=await compressMemberPhoto(file);
+    data.members[i].photo=photo;
+    const ok=await saveSharedData();
+    renderMembers();
+    alert(ok ? "사진이 저장되었습니다. 다른 기기에도 공유됩니다." : "사진은 이 기기에 저장했지만 공동 저장에는 실패했습니다.");
+  }catch(e){
+    alert(e.message||"사진을 저장하지 못했습니다.");
+  }finally{
+    input.value="";
+  }
+}
+
+async function removeMemberPhoto(i){
+  if(!confirm("이 팀원의 사진을 삭제할까요?"))return;
+  data.members[i].photo="";
+  const ok=await saveSharedData();
+  renderMembers();
+  if(!ok) alert("사진은 이 기기에서 삭제했지만 공동 저장에는 실패했습니다.");
+}
+
+function renderEditor(){
+ $("#editor").innerHTML=`<h3>기본 설명</h3><div class="editor"><textarea id="introEdit">${esc(data.intro)}</textarea></div>
+ <h3 style="margin-top:25px">기관 3곳</h3>`+data.institutions.map((x,i)=>`<div class="card" style="margin:12px 0"><h3>기관 ${i+1}</h3><div class="editor"><input data-i="${i}" id="institution-${i}" data-k="name" value="${esc(x.name)}" placeholder="기관명"><input data-i="${i}" id="institution-${i}" data-k="building" value="${esc(x.building)}" placeholder="건물/호수"><textarea data-i="${i}" id="institution-${i}" data-k="summary" placeholder="소개">${esc(x.summary)}</textarea><textarea data-i="${i}" id="institution-${i}" data-k="services" placeholder="서비스 (줄바꿈으로 구분)">${esc(x.services)}</textarea><input data-i="${i}" id="institution-${i}" data-k="hours" value="${esc(x.hours)}" placeholder="운영시간"><input data-i="${i}" id="institution-${i}" data-k="contact" value="${esc(x.contact)}" placeholder="연락처"><input data-i="${i}" id="institution-${i}" data-k="link" value="${esc(x.link)}" placeholder="공식 홈페이지 URL"></div></div>`).join("")+
+ `<h3 style="margin-top:25px">팀원 명단</h3>
+ <p class="muted">이름과 역할을 수정할 수 있습니다. 사진은 위의 팀원 명단에서 각자 올릴 수 있습니다.</p>
+ <div>${data.members.map((m,i)=>`<div class="card" style="margin:12px 0"><h3>팀원 ${i+1}</h3><div class="editor"><input data-m="${i}" data-mk="name" value="${esc(m.name)}" placeholder="이름"><input data-m="${i}" data-mk="role" value="${esc(m.role)}" placeholder="역할 / 담당 내용"></div></div>`).join("")}</div>
+ `<h3 style="margin-top:25px">건물 데이터</h3><p class="muted">건물 목록은 현재 프로토타입에 넣은 자료입니다. 팀에서 조사한 공식 자료에 맞춰 추가·수정할 수 있습니다.</p>
+ <div class="toolbar"><button class="primary" onclick="addBuilding()">건물 추가</button></div>
+ <div id="buildingEditor">${data.buildings.map((x,i)=>`<div class="row item"><input data-b="${i}" id="building-${i}" data-k="0" value="${esc(x[0])}"><input data-b="${i}" id="building-${i}" data-k="1" value="${esc(x[1])}"><input data-b="${i}" id="building-${i}" data-k="2" value="${esc(x[2])}"><textarea data-b="${i}" id="building-${i}" data-k="3">${esc(x[3])}</textarea><button onclick="delBuilding(${i})">삭제</button></div>`).join("")}</div>`;
+}
+function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
+async function saveAll(){
+ data.intro=$("#introEdit").value;
+ document.querySelectorAll("[data-i]").forEach(el=>data.institutions[+el.dataset.i][el.dataset.k]=el.value);
+ document.querySelectorAll("[data-b]").forEach(el=>data.buildings[+el.dataset.b][+el.dataset.k]=el.value);
+ document.querySelectorAll("[data-m]").forEach(el=>data.members[+el.dataset.m][el.dataset.mk]=el.value);
+ const ok=await saveSharedData();
+ render();
+ alert(ok ? "저장 완료! 다른 기기에도 반영됩니다." : "저장 실패. 화면의 Firebase 오류 문구를 확인해주세요.");
+}
+function resetAll(){if(confirm("기본 내용으로 초기화할까요?")){data=structuredClone(defaults);saveSharedData();render()}}
+function addBuilding(){data.buildings.push(["999","새 건물","분류","설명을 입력하세요."]);renderEditor()}
+function delBuilding(i){data.buildings.splice(i,1);renderEditor()}
+function exportData(){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));a.download="hyu-dashboard-data.json";a.click()}
+$("#importFile").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{data=JSON.parse(r.result);data.institutions.forEach(x=>{if(!x.reviews)x.reviews=[]});saveSharedData();render();alert("가져왔습니다.")}catch{alert("JSON 형식이 올바르지 않습니다.")}};r.readAsText(f)});
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  document.querySelectorAll(".section").forEach(x=>x.classList.remove("show"));
+  const target=$("#"+b.dataset.tab);
+  if(target){
+    target.classList.add("show");
+    setTimeout(()=>target.scrollIntoView({behavior:"smooth",block:"start"}),0);
+  }
+});
+$("#search").addEventListener("input",renderBuildings); $("#group").addEventListener("change",renderBuildings);
+$("#firebaseConfig").value=localStorage.getItem(firebaseConfigKey)||JSON.stringify(embeddedFirebaseConfig,null,2);
+if(!firebaseConfig) firebaseConfig=embeddedFirebaseConfig;
+initFirebase();
+function goToSection(tab){
+  const target=$("#"+tab);
+  if(!target)return;
+  document.querySelectorAll(".section").forEach(x=>x.classList.remove("show"));
+  target.classList.add("show");
+  document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
+  setTimeout(()=>target.scrollIntoView({behavior:"smooth",block:"start"}),0);
+}
+
+function showBuilding(i){const x=data.buildings[i];$("#modalContent").innerHTML=`<span class="tag">${x[0]}</span><span class="tag">${x[2]}</span><h2>${x[1]}</h2><p>${x[3]}</p>`;$("#modal").classList.add("show")}
+function closeModal(){$("#modal").classList.remove("show")}
+if($("#introInlineEdit")) $("#introInlineEdit").value=data.intro;
+render();
+</script>
+</body>
+</html>
